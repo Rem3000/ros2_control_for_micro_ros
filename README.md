@@ -11,7 +11,7 @@ if u want to use topic
 {
 
       ros2 topic pub --once /joint_trajectory_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory '{
-        joint_names: ["front_left_wheel_joint"],
+        joint_names: ["joint"],
         points: [
           {
             positions: [1.57],
