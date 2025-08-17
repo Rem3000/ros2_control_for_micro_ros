@@ -1,6 +1,6 @@
 # ros2_control_for_micro_ros
 -----------------------------------
-Please use platform
+Please use platformIO
 -----------------------------------
 action Net yet finished
 -----------------------------------
