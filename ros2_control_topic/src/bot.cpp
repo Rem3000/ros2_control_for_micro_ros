@@ -3,18 +3,14 @@
 
 /*==================MicroROS消息============================*/
 sensor_msgs__msg__JointState joint_msg;
-sensor_msgs__msg__JointState joint_msg_static; // 用于存储静态的 joint_msg，避免每次发布时都重新分配内存
 trajectory_msgs__msg__JointTrajectory trajectory_msg; // 軌跡訊息接收
 
 /*==================MicroROS配置============================*/
 static micro_ros_utilities_memory_conf_t conf = {0}; // 配置 Micro-ROS 库中的静态的内存管理器
-static int keyvalue_capacity = 100;                  // 机器人配置信息中键值对（key-value）的最大容量，即最多能存储多少个键值对
 // 机器人配置信息中键值对（key-value）的最大容量
 /*==================MicroROS订阅发布者服务========================*/
 rcl_publisher_t joint_state_publisher;
 rcl_subscription_t trajectory_subscriber; // 軌跡訊息訂閱者
-
-
 
 /*==================MicroROS相关执行器&节点===================*/
 rclc_executor_t executor;
@@ -100,7 +96,6 @@ void trajectory_callback(const void *msgin) {
   }
 }
 
-// 中斷處理函數
 void callback_publisher(rcl_timer_t *timer, int64_t last_call_time){
   static float vel[1], pos[1];
   RCLC_UNUSED(last_call_time);
@@ -181,7 +176,7 @@ void initializeHardware(){
   // 3.设置PID
   vel_pid[0].update_target(0.0);
   vel_pid[0].update_pid(vel_P, vel_I, vel_D);
-  vel_pid[0].out_limit(-220, 220);  // 降低最大輸出，讓動作更溫和
+  vel_pid[0].out_limit(-220, 220);  // 降低最大輸出
   
 
 
@@ -344,14 +339,10 @@ bool destory_bot_transport(){
   // 清理軌跡訊息記憶體
   trajectory_msgs__msg__JointTrajectory__fini(&trajectory_msg);
   
-  // 用于销毁一个 ROS 2 订阅者（Subscriber）
-  // 用于销毁一个 ROS 2 定时器（Timer）
+
   RCSOFTCHECK(rcl_timer_fini(&timer));
-  // 用于停止执行器（Executor）并释放相关资源
   RCSOFTCHECK(rclc_executor_fini(&executor));
-  // 用于销毁一个 ROS 2 节点（Node）
   RCSOFTCHECK(rcl_node_fini(&node));
-  // 用于释放支持库中分配的资源
   rclc_support_fini(&support);
   return true;
 }

@@ -3,7 +3,6 @@
 
 /*==================MicroROS消息============================*/
 sensor_msgs__msg__JointState joint_msg;
-sensor_msgs__msg__JointState joint_msg_static; // 用于存储静态的 joint_msg，避免每次发布时都重新分配内存
 control_msgs__action__FollowJointTrajectory_FeedbackMessage feedback;
 control_msgs__action__FollowJointTrajectory_GetResult_Response result;
 /*==================MicroROS配置============================*/
@@ -72,10 +71,10 @@ rcl_ret_t handle_goal(rclc_action_goal_handle_t *goal_handle, void *context){
     goal_active = true;
     
     // 儲存軌跡資料
-    trajectory_msgs__msg__JointTrajectory *goal_trajectory = &req->goal.trajectory;
+    // trajectory_msgs__msg__JointTrajectory *goal_trajectory = &req->goal.trajectory;
     // goal_trajectory->joint_names = &req->goal.trajectory.joint_names; // 不需要這行，joint_names 已經在 goal_trajectory 中
     // 檢查軌跡是否有效
-    if (goal_trajectory->points.data->positions.size == 0) {
+    if (req->goal.trajectory.points.data->positions.size == 0) {
         return RCL_RET_ACTION_GOAL_REJECTED;
     }
     
@@ -84,14 +83,16 @@ rcl_ret_t handle_goal(rclc_action_goal_handle_t *goal_handle, void *context){
     delay(100);  // 短暫停止
 
     // 複製軌跡到當前軌跡
-    current_trajectory = *goal_trajectory;
+    current_trajectory = req->goal.trajectory;
     
     // 設置主要目標值為軌跡的最終位置
-    if (goal_trajectory->points.size > 0) {
-        int final_point_idx = goal_trajectory->points.size - 1;
-        if (goal_trajectory->points.data[final_point_idx].positions.size > 0) {
-            main_goal = goal_trajectory->points.data[final_point_idx].positions.data[0];
+    if (current_trajectory.points.size > 0) {
+        int final_point_idx = current_trajectory.points.size - 1;
+        if (current_trajectory.points.data[final_point_idx].positions.size > 0) {
+            main_goal = current_trajectory.points.data[final_point_idx].positions.data[0];
         }
+      g_goal_handle = goal_handle;
+     return RCL_RET_ACTION_GOAL_ACCEPTED;
     }
     
     // 設定軌跡開始時間
@@ -99,8 +100,6 @@ rcl_ret_t handle_goal(rclc_action_goal_handle_t *goal_handle, void *context){
     current_trajectory_point = 0;
     trajectory_state.has_trajectory = true;
     
-    g_goal_handle = goal_handle;
-    return RCL_RET_ACTION_GOAL_ACCEPTED;
 }
 bool handle_cancel(rclc_action_goal_handle_t * goal_handle, void * context) {
     (void) context;
@@ -113,7 +112,6 @@ bool handle_cancel(rclc_action_goal_handle_t * goal_handle, void * context) {
     
     return true;  // 總是接受取消請求
 }
-// 中斷處理函數 - 同時處理 joint state 發布和 action feedback/result
 void callback_publisher(rcl_timer_t *timer, int64_t last_call_time){
   static float vel[1], pos[1];
   RCLC_UNUSED(last_call_time);
@@ -136,7 +134,6 @@ void callback_publisher(rcl_timer_t *timer, int64_t last_call_time){
     
     // Action goal 處理邏輯
     if (timer == NULL || !goal_active || g_goal_handle == NULL) {
-        result.result.error_code = control_msgs__action__FollowJointTrajectory_Result__PATH_TOLERANCE_VIOLATED;
         return;
     }
 
@@ -194,7 +191,7 @@ void callback_publisher(rcl_timer_t *timer, int64_t last_call_time){
     
     RCSOFTCHECK(rclc_action_publish_feedback(g_goal_handle, &feedback));
 
-    // 檢查是否完成軌跡 - 更嚴格的完成條件
+    // 檢查是否完成軌跡 
     static unsigned long trajectory_stable_time = 0;
     bool position_achieved = (error_goal <= 0.1);
     bool velocity_low = (abs(vel[0]) <= 0.05); // 速度接近零
@@ -221,7 +218,7 @@ void callback_publisher(rcl_timer_t *timer, int64_t last_call_time){
     if (trajectory_duration > 30) {
         result.result.error_code = control_msgs__action__FollowJointTrajectory_Result__PATH_TOLERANCE_VIOLATED;
         result.result.error_string = micro_ros_string_utilities_set(result.result.error_string, "timeout");
-        RCSOFTCHECK(rclc_action_send_result(g_goal_handle, GOAL_STATE_SUCCEEDED, &result)); // 仍然標記為成功，但記錄超時
+        RCSOFTCHECK(rclc_action_send_result(g_goal_handle, GOAL_STATE_ABORTED, &result)); // 仍然標記為成功，但記錄超時
         goal_active = false;
         g_goal_handle = NULL;
         trajectory_state.has_trajectory = false;
@@ -433,7 +430,7 @@ bool create_bot_transport(){
   // 調用 rclc_timer_init_default 函數初始化 ROS 2 定時器，傳入支持庫、定時器周期和回調函數
   RCSOFTCHECK(rclc_timer_init_default(&timer, &support, RCL_MS_TO_NS(timer_timeout), callback_publisher));
   // 調用 rclc_executor_init 函數初始化 ROS 2 執行器，傳入支持庫、執行器線程數和內存分配器
-  RCSOFTCHECK(rclc_executor_init(&executor, &support.context, 6, &allocator)); // 6 個處理程序（timer + action goal + action cancel + action feedback + action result + action cancel request）
+  RCSOFTCHECK(rclc_executor_init(&executor, &support.context, 10, &allocator)); // 6 個處理程序（timer + action goal + action cancel + action feedback + action result + action cancel request）
   
   RCSOFTCHECK(rclc_executor_add_action_server(
         &executor,
