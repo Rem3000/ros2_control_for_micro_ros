@@ -18,10 +18,10 @@
 #include <micro_ros_utilities/type_utilities.h>
 #include <micro_ros_utilities/string_utilities.h>
 #include <std_msgs/msg/header.h>
-#include <geometry_msgs/msg/twist.h>
 #include <sensor_msgs/msg/joint_state.h>
-#include <trajectory_msgs/msg/joint_trajectory.h>  
+#include <control_msgs/action/follow_joint_trajectory.h>
 #include <rmw/qos_profiles.h>
+
 
 
 #include <Adafruit_NeoPixel.h>
@@ -57,4 +57,9 @@ void updateMotor(float speed, uint8_t index);
 void RGB(uint8_t r, uint8_t g, uint8_t b, uint8_t Brightness=10, bool Brightness_on = false);
 float encoder_to_rad();
 float encoder_to_rads(); 
+void error_loop();
+
+// Action callback functions
+rcl_ret_t handle_goal(rclc_action_goal_handle_t *goal_handle, void *context);
+bool handle_cancel(rclc_action_goal_handle_t *goal_handle, void *context); 
 #endif
